@@ -1,204 +1,97 @@
+import * as t from "data-type-ts"
 import { useEffect, useMemo, useState } from "react"
-import * as s from "superstruct"
-import { Subspace, transactional } from "tuple-database"
-import { InMemoryStorage } from "tuple-database/storage/InMemoryStorage"
+import {
+	deleteObj,
+	OrderedTriplestore,
+	proxyObj,
+	writeObj,
+} from "triple-database/database/OrderedTriplestore"
+import { first } from "triple-database/helpers/listHelpers"
+import { randomId } from "triple-database/helpers/randomId"
+import { transactional } from "tuple-database"
 import { useEnvironment } from "./Environment"
 import { shallowEqual } from "./helpers/shallowEqual"
 import { useRefCurrent } from "./hooks/useRefCurrent"
 import { StateMachine } from "./StateMachine"
 
-const db = new InMemoryStorage()
+const db2 = new OrderedTriplestore()
 
-export type Player = { id: number; name: string; score: number }
-export type Game = { players: Player[] }
-
-const app = new Subspace("app")
-const playersList = app.subspace("playersList") // {[number, id]: null}
-const playersById = app.subspace("playersById") // {[id]: {name, score}}
-
-const addPlayer = transactional((tx, player: Player) => {
-	const result = tx.scan({ ...playersList.range(), limit: 1, reverse: true })
-	let nextIndex = 0
-	if (result.length) {
-		const index = playersList.unpack(result[0])[0] as number
-		nextIndex = index + 1
-	}
-	tx.set(playersList.pack([nextIndex, player.id]), null)
-	tx.set(playersById.pack([player.id]), player)
+const PlayerSchema = t.object({
+	required: {
+		id: t.string,
+		name: t.string,
+		score: t.number,
+	},
+	optional: {},
 })
 
-// addPlayer(game: Game) {
-// 	const { players } = game
-// 	return { players: [...players, newPlayer()] }
-// }
-
-const deletePlayer = transactional((tx, index: number) => {
-	const result = tx.scan({
-		...playersList.range([index]),
-		limit: 1,
-		reverse: true,
-	})
-	if (result.length === 0) throw new Error("Missing player at index.")
-	tx.remove(result[0])
-	const playerId = playersList.unpack(result[0])[1] as string
-	tx.remove(playersById.pack([playerId]))
+const GameSchema = t.object({
+	required: {
+		id: t.string,
+		players: t.array(t.string),
+	},
+	optional: {},
 })
 
-// deletePlayer(game: Game, index: number) {
-// 	const { players } = game
-// 	const newPlayers = [...players]
-// 	newPlayers.splice(index, 1)
-// 	return { players: newPlayers }
-// }
+export type Player = typeof PlayerSchema.value
+export type Game = typeof GameSchema.value
 
-// editName(game: Game, index: number, newName: string) {
-// 	const players = game.players.map((player, i) => {
-// 		if (i !== index) return player
-// 		return { ...player, name: newName }
-// 	})
-// 	return { players }
-// },
-// incrementScore(game: Game, index: number, delta: number) {
-// 	const players = game.players.map((player, i) => {
-// 		if (i !== index) return player
-// 		return { ...player, score: player.score + delta }
-// 	})
-// 	return { players }
-// },
-// resetGame(game: Game) {
-// 	return newGame()
-// },
+const addPlayer = transactional((tx, gameId: string, player: Player) => {
+	writeObj(tx, player, PlayerSchema)
+	// Using a proxy to create a typed interface.
+	const game = proxyObj(tx, gameId, GameSchema)
+	game.players.push(player.id)
+	return player.id
+})
 
-// ============================================================================
-// Object wrappers
-// ============================================================================
+const setName = transactional((tx, playerId: string, newName: string) => {
+	const player = proxyObj(tx, playerId, PlayerSchema)
+	player.name = newName
+})
 
-const Uuid = s.object({ id: s.string() })
+const incrementScore = transactional((tx, playerId: string, delta: number) => {
+	const player = proxyObj(tx, playerId, PlayerSchema)
+	player.score += delta
+})
 
-class ListNode {
-	constructor(public id: string) {}
+const newGame = transactional((tx) => {
+	// A little tricky here because an empty game with no players doesn't even appear
+	// in the database. If we wanted there to be such thing as an empty game, we would
+	// just create a type: "Game" property. But for now, we'll just create an new player.
+	const gameId = randomId()
+	addPlayer(tx, gameId, { id: randomId(), name: "", score: 0 })
+	return gameId
+})
 
-	value() {
-		const results = query([[this.id, "value", $("value")]])
-		if (results.length === 0) throw new Error("ListNode has no value.")
-		if (results.length > 1) throw new Error("ListNode has more than one value.")
-		const value = results[0].value
-		return value as any
+const deleteGame = transactional((tx, gameId: string) => {
+	// Tricky question: can players belong to more than one game?
+	// As an example of something non-trivial, lets delete a player if they no longer
+	// belong to any games.
+	const game = proxyObj(tx, gameId, GameSchema)
+	for (const playerId of game.players) {
+		const result = tx.scan({ prefix: ["vaeo", playerId] }).map(first)
+		if (result.length === 1) deleteObj(tx, playerId, PlayerSchema)
 	}
 
-	next() {
-		const results = query([[this.id, "next", $("next")]])
-		if (results.length === 0) return
-		if (results.length > 1)
-			throw new Error("ListNode has more than one next node.")
-		const value = results[0].next
-		s.assert(value, Uuid)
-		return new ListNode(value.id)
-	}
-}
+	deleteObj(tx, gameId, GameSchema)
+})
 
-class Game2 {
-	constructor(public id: string) {}
-	players() {
-		const results = query([[this.id, "players", $("head")]])
-		if (results.length === 0) return []
-		if (results.length > 1)
-			throw new Error("ListNode has more than one start node.")
+const deletePlayer = transactional((tx, gameId: string, playerId: string) => {
+	// The quick and dirty way of doing it, deleting the whole object
+	// along with any links to the object.
+	// hardDeleteObj(tx, playerId)
 
-		const head = results[0].head
-		s.assert(head, Uuid)
+	// The clean and explicit way of doing it, only deleting the given
+	// properties, but not deleting backlinks or any properties this schema
+	// does not know of.
+	deleteObj(tx, playerId, PlayerSchema)
+	// Remove from the players list.
+	const game = proxyObj(tx, gameId, GameSchema)
 
-		let cursor: ListNode | undefined = new ListNode(head.id)
-		const list: any[] = []
-
-		while (cursor) {
-			list.push(cursor.value())
-			cursor = cursor.next()
-		}
-
-		return list.map((playerId) => new Player2(playerId))
-
-		// store as linked list -- lots of individual listeners.
-		//   reording is performant. changing the value is performant too.
-		// store as a vector -- need an index. [list, item, $item], [$item, sort, $sort]. a single listener.
-		//   reorder an item, need to recursively check a bunhc of vectors... could optimize here though,
-		//   find all the listeners with the same shape and fetch the list type. this has a risk though, if the
-		//   same item is in way more lists than are being listened to...
-		// store as a vector with dynamic attributes -- seems like a bad idea because it liters the data model.
-		//   single listener, no index: [list, $order, $value], performant write-reactivity too...
-	}
-}
-
-class Player2 {
-	constructor(public id: string) {}
-	name() {
-		const result = query([[this.id, "name", $("name")]])
-		if (result.length === 0) return ""
-		if (result.length > 1) throw new Error("Player has more than one name.")
-		const name = result[0].name
-		s.assert(name, s.string())
-		return name
-	}
-	score() {
-		const result = query([[this.id, "score", $("score")]])
-		if (result.length === 0) return 0
-		if (result.length > 1) throw new Error("Player has more than one score.")
-		const score = result[0].score
-		s.assert(score, s.number())
-		return score
-	}
-
-	setName(newName: string) {
-		// Read the name, delete the value, write a new name.
-	}
-}
-
-// This feels like something we could generate from typescript types...
-// Can we do this somehow with typescript magic instead?
-
-// TODO
-// - how can we generate these objects from a more compact schema?
-//   data-type-ts or superstruct?
-// - how can we make them reactive? can we use reactive magic somehow?
-// - look at how automerge and mobx work for mutations on the list...
-
-export function newPlayer(): Player {
-	return { name: "", score: 0 }
-}
-
-export function newGame(): Game {
-	return { players: [newPlayer()] }
-}
-
-const reducers = {
-	addPlayer(game: Game) {
-		const { players } = game
-		return { players: [...players, newPlayer()] }
-	},
-	deletePlayer(game: Game, index: number) {
-		const { players } = game
-		const newPlayers = [...players]
-		newPlayers.splice(index, 1)
-		return { players: newPlayers }
-	},
-	editName(game: Game, index: number, newName: string) {
-		const players = game.players.map((player, i) => {
-			if (i !== index) return player
-			return { ...player, name: newName }
-		})
-		return { players }
-	},
-	incrementScore(game: Game, index: number, delta: number) {
-		const players = game.players.map((player, i) => {
-			if (i !== index) return player
-			return { ...player, score: player.score + delta }
-		})
-		return { players }
-	},
-	resetGame(game: Game) {
-		return newGame()
-	},
-}
+	// Without passing the index, this will delete all instances of the player
+	// from this list.
+	game.players.delete(playerId)
+})
 
 export class AppState extends StateMachine<Game, typeof reducers> {
 	constructor(initialGame: Game) {
