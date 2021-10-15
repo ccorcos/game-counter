@@ -1,13 +1,19 @@
 import React from "react"
+import { randomId } from "triple-database/helpers/randomId"
 import { deletePlayer } from "../actions/deletePlayer"
 import { resetGame } from "../actions/resetGame"
-import { Player, useAppState } from "../AppState"
+import { Player, useGame, usePlayer } from "../AppState"
 import { useEnvironment } from "../Environment"
+import { gameId } from "../schema"
+
+function newPlayer(): Player {
+	return { id: randomId(), name: "", score: 0 }
+}
 
 export function App() {
 	const environment = useEnvironment()
 	const { app } = environment
-	const players = useAppState((game) => game.players)
+	const { players } = useGame(gameId)
 	return (
 		<div
 			style={{
@@ -17,21 +23,24 @@ export function App() {
 			}}
 		>
 			<h2>Game Score Counter</h2>
-			{players.map((player, index) => (
-				<Player player={player} index={index} key={index} />
+			{players.map((playerId, index) => (
+				<PlayerComp playerId={playerId} key={index} index={index} />
 			))}
 			<div style={{ display: "flex", gap: 8 }}>
-				<button onClick={() => app.dispatch.addPlayer()}>Add Player</button>
+				<button onClick={() => app.addPlayer(gameId, newPlayer())}>
+					Add Player
+				</button>
 				<button onClick={() => resetGame(environment)}>Reset Game</button>
 			</div>
 		</div>
 	)
 }
 
-function Player(props: { player: Player; index: number }) {
-	const { player, index } = props
+function PlayerComp(props: { playerId: string; index: number }) {
+	const { playerId, index } = props
 	const environment = useEnvironment()
 	const { app } = environment
+	const player = usePlayer(playerId)
 
 	return (
 		<div style={{ display: "flex", paddingBottom: 8 }}>
@@ -54,9 +63,7 @@ function Player(props: { player: Player; index: number }) {
 					}}
 					placeholder={`Player ${index + 1}`}
 					value={player.name}
-					onChange={(event) =>
-						app.dispatch.editName(index, event.target!.value)
-					}
+					onChange={(event) => app.setName(playerId, event.target!.value)}
 				/>
 				<div
 					style={{
@@ -75,7 +82,7 @@ function Player(props: { player: Player; index: number }) {
 							background: "transparent",
 							color: "red",
 						}}
-						onClick={() => deletePlayer(environment, index)}
+						onClick={() => deletePlayer(environment, playerId)}
 					>
 						Delete
 					</button>
@@ -85,7 +92,7 @@ function Player(props: { player: Player; index: number }) {
 				<div>
 					<button
 						style={{ flex: 1, padding: "6px 16px" }}
-						onClick={() => app.dispatch.incrementScore(index, -1)}
+						onClick={() => app.incrementScore(playerId, -1)}
 					>
 						-1
 					</button>
@@ -103,7 +110,7 @@ function Player(props: { player: Player; index: number }) {
 				<div>
 					<button
 						style={{ flex: 1, padding: "6px 16px" }}
-						onClick={() => app.dispatch.incrementScore(index, +1)}
+						onClick={() => app.incrementScore(playerId, +1)}
 					>
 						+1
 					</button>

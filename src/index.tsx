@@ -8,10 +8,10 @@ import "./index.css"
 
 // Build the environment.
 const storage = new AppStorage()
-const initialState = storage.get()
+// const initialState = storage.get()
 
-const app = new AppState(initialState)
-app.addListener(() => storage.set(app.state))
+const app = new AppState()
+// app.addListener(() => storage.set(app.state))
 
 const environment: Environment = { app }
 

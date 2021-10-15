@@ -1,18 +1,17 @@
 import * as t from "data-type-ts"
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
 	deleteObj,
+	Obj,
 	OrderedTriplestore,
 	proxyObj,
+	subscribeObj,
 	writeObj,
 } from "triple-database/database/OrderedTriplestore"
 import { first } from "triple-database/helpers/listHelpers"
 import { randomId } from "triple-database/helpers/randomId"
-import { transactional } from "tuple-database"
+import { Transaction, transactional, TupleStorage } from "tuple-database"
 import { useEnvironment } from "./Environment"
-import { shallowEqual } from "./helpers/shallowEqual"
-import { useRefCurrent } from "./hooks/useRefCurrent"
-import { StateMachine } from "./StateMachine"
 
 const db2 = new OrderedTriplestore()
 
@@ -93,28 +92,85 @@ const deletePlayer = transactional((tx, gameId: string, playerId: string) => {
 	game.players.delete(playerId)
 })
 
-export class AppState extends StateMachine<Game, typeof reducers> {
-	constructor(initialGame: Game) {
-		super(initialGame, reducers)
-	}
+const resetGame = transactional((tx, gameId: string) => {
+	deleteGame(tx, gameId)
+	addPlayer(tx, gameId, { id: randomId(), name: "", score: 0 })
+})
+
+const actions = {
+	addPlayer,
+	setName,
+	incrementScore,
+	newGame,
+	deleteGame,
+	deletePlayer,
+	resetGame,
 }
 
-export function useAppState<T>(selector: (state: Game) => T) {
-	const { app } = useEnvironment()
-	const initialState = useMemo(() => {
-		return selector(app.state)
-	}, [])
+export class AppState {
+	public db = new OrderedTriplestore()
 
-	const [state, setState] = useState(initialState)
-	const currentStateRef = useRefCurrent(state)
+	wrap<Args extends any[], O>(
+		fn: (tx: TupleStorage | Transaction, ...args: Args) => O
+	) {
+		return (...args: Args) => {
+			return fn(this.db, ...args)
+		}
+	}
 
-	useEffect(() => {
-		return app.addListener(() => {
-			const nextState = selector(app.state)
-			if (shallowEqual(currentStateRef.current, nextState)) return
-			setState(nextState)
+	// Seems like its still a good idea to use dispatch.
+	addPlayer = this.wrap(addPlayer)
+	setName = this.wrap(setName)
+	incrementScore = this.wrap(incrementScore)
+	newGame = this.wrap(newGame)
+	deleteGame = this.wrap(deleteGame)
+	deletePlayer = this.wrap(deletePlayer)
+	resetGame = this.wrap(resetGame)
+}
+
+function useObj<T extends Obj>(
+	db: OrderedTriplestore,
+	id: string,
+	schema: t.RuntimeDataType<T>
+) {
+	const objRef = useRef<T>()
+	const rerender = useRerender()
+
+	const unsubscribe = useMemo(() => {
+		const [initialObj, unsubscribe] = subscribeObj(db, id, schema, (newObj) => {
+			objRef.current = newObj
+			rerender()
 		})
-	}, [])
+		objRef.current = initialObj
+		return unsubscribe
+	}, [db, id, schema])
 
-	return state
+	useEffect(() => unsubscribe, [unsubscribe])
+
+	return objRef.current as T
+}
+
+function useRerender() {
+	const [state, setState] = useState(0)
+	const rerender = useCallback(() => setState((state) => state + 1), [])
+	return rerender
+}
+
+export function useAppState() {
+	const { app } = useEnvironment()
+	return app
+}
+
+export function usePlayer(id: string) {
+	const {
+		app: { db },
+	} = useEnvironment()
+	return useObj(db, id, PlayerSchema)
+}
+
+export function useGame(id: string) {
+	const {
+		app: { db },
+	} = useEnvironment()
+	return useObj(db, id, GameSchema)
 }
