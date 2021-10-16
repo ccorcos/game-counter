@@ -12,30 +12,14 @@ import { first } from "triple-database/helpers/listHelpers"
 import { randomId } from "triple-database/helpers/randomId"
 import { Transaction, transactional, TupleStorage } from "tuple-database"
 import { useEnvironment } from "./Environment"
+import { gameId, GameSchema, Player, PlayerSchema } from "./schema"
 
-const db2 = new OrderedTriplestore()
+function newPlayer(): Player {
+	return { id: randomId(), name: "", score: 0 }
+}
 
-const PlayerSchema = t.object({
-	required: {
-		id: t.string,
-		name: t.string,
-		score: t.number,
-	},
-	optional: {},
-})
-
-const GameSchema = t.object({
-	required: {
-		id: t.string,
-		players: t.array(t.string),
-	},
-	optional: {},
-})
-
-export type Player = typeof PlayerSchema.value
-export type Game = typeof GameSchema.value
-
-const addPlayer = transactional((tx, gameId: string, player: Player) => {
+const addPlayer = transactional((tx, gameId: string) => {
+	const player = newPlayer()
 	writeObj(tx, player, PlayerSchema)
 	// Using a proxy to create a typed interface.
 	const game = proxyObj(tx, gameId, GameSchema)
@@ -58,7 +42,7 @@ const newGame = transactional((tx) => {
 	// in the database. If we wanted there to be such thing as an empty game, we would
 	// just create a type: "Game" property. But for now, we'll just create an new player.
 	const gameId = randomId()
-	addPlayer(tx, gameId, { id: randomId(), name: "", score: 0 })
+	addPlayer(tx, gameId)
 	return gameId
 })
 
@@ -94,7 +78,7 @@ const deletePlayer = transactional((tx, gameId: string, playerId: string) => {
 
 const resetGame = transactional((tx, gameId: string) => {
 	deleteGame(tx, gameId)
-	addPlayer(tx, gameId, { id: randomId(), name: "", score: 0 })
+	addPlayer(tx, gameId)
 })
 
 const actions = {
@@ -109,6 +93,11 @@ const actions = {
 
 export class AppState {
 	public db = new OrderedTriplestore()
+
+	constructor() {
+		addPlayer(this.db, gameId)
+		window["app"] = this
+	}
 
 	wrap<Args extends any[], O>(
 		fn: (tx: TupleStorage | Transaction, ...args: Args) => O
@@ -128,7 +117,7 @@ export class AppState {
 	resetGame = this.wrap(resetGame)
 }
 
-function useObj<T extends Obj>(
+export function useObj<T extends Obj>(
 	db: OrderedTriplestore,
 	id: string,
 	schema: t.RuntimeDataType<T>
@@ -165,6 +154,7 @@ export function usePlayer(id: string) {
 	const {
 		app: { db },
 	} = useEnvironment()
+	console.log("usePlayer", id)
 	return useObj(db, id, PlayerSchema)
 }
 
@@ -172,5 +162,6 @@ export function useGame(id: string) {
 	const {
 		app: { db },
 	} = useEnvironment()
+	console.log("useGame", id)
 	return useObj(db, id, GameSchema)
 }

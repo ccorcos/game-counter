@@ -1,14 +1,9 @@
 import React from "react"
-import { randomId } from "triple-database/helpers/randomId"
 import { deletePlayer } from "../actions/deletePlayer"
 import { resetGame } from "../actions/resetGame"
-import { Player, useGame, usePlayer } from "../AppState"
+import { useGame, usePlayer } from "../AppState"
 import { useEnvironment } from "../Environment"
 import { gameId } from "../schema"
-
-function newPlayer(): Player {
-	return { id: randomId(), name: "", score: 0 }
-}
 
 export function App() {
 	const environment = useEnvironment()
@@ -27,9 +22,7 @@ export function App() {
 				<PlayerComp playerId={playerId} key={index} index={index} />
 			))}
 			<div style={{ display: "flex", gap: 8 }}>
-				<button onClick={() => app.addPlayer(gameId, newPlayer())}>
-					Add Player
-				</button>
+				<button onClick={() => app.addPlayer(gameId)}>Add Player</button>
 				<button onClick={() => resetGame(environment)}>Reset Game</button>
 			</div>
 		</div>

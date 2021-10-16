@@ -1,4 +1,4 @@
-import { Game, newGame } from "./AppState"
+import { Game } from "./schema"
 
 const localStorageKey = "__GameScore__"
 
@@ -13,7 +13,6 @@ export class AppStorage {
 				}
 			}
 		} catch (error) {}
-		return newGame()
 	}
 	set(game: Game) {
 		localStorage.setItem(localStorageKey, JSON.stringify(game))
