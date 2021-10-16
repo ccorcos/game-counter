@@ -1,6 +1,13 @@
 import * as t from "data-type-ts"
+import { capitalize } from "lodash"
 import React from "react"
-import { OrderedTriplestore } from "triple-database/database/OrderedTriplestore"
+import {
+	Obj,
+	OrderedTriplestore,
+	proxyObj,
+	ProxyObj,
+	writeObj,
+} from "triple-database/database/OrderedTriplestore"
 import { useObj } from "../AppState"
 
 export const CounterSchema = t.object({
@@ -14,78 +21,96 @@ export const CounterSchema = t.object({
 
 export type Counter = typeof CounterSchema.value
 
-const db = new OrderedTriplestore()
-const orm = {
-	useCounter(id: string) {
-		return useObj(db, id, CounterSchema)
-	},
-	// counter(id: string) {
-	// return proxyObj(db, id, CounterSchema)
-	// },
-	counter: {} as any,
+type AnySchema = { [schema: string]: Obj }
+
+type OrmProxy<T extends AnySchema> = {
+	[K in keyof T]: (id: string) => ProxyObj<T[K]>
 }
 
-// The real reason for the orm is the list methods. otherwise if could
-// be as simple as useState.
+// https://www.typescriptlang.org/docs/handbook/2/mapped-types.html#key-remapping-via-as
+type OrmHook<T extends AnySchema> = {
+	[K in keyof T as `use${Capitalize<string & K>}`]: (id: string) => T[K]
+}
 
-// Reactivity with ReactiveMagic would be pretty dope right about now.
+type OrmCreate<T extends AnySchema> = {
+	[K in keyof T as `create${Capitalize<string & K>}`]: (obj: T[K]) => void
+}
 
-const id = orm.counter.create({ count: 0, delta: 0 })
-const counter = orm.counter.get(id)
+type OrmTx<T extends AnySchema> = OrmProxy<T> &
+	OrmCreate<T> & { commit(): void }
 
-// Basically a mongoose syntax.
-// https://www.prisma.io/docs/concepts/components/prisma-client/select-fields
-// orm.counter.update({
-// 	where: {
-// 		id: 22,
-// 	},
-// 	select: {
-// 		email: true,
-// 		name: true,
-// 	},
-// })
+type Orm<T extends AnySchema> = OrmHook<T> & {
+	transact(): OrmTx<T>
+}
 
-// https://www.prisma.io/docs/reference/api-reference/prisma-client-reference#scalar-list-methods
+type RuntimeSchema<T extends AnySchema> = {
+	[K in keyof T]: t.RuntimeDataType<T[K]>
+}
 
-// await prisma.post.update({
-//   where: {
-//     id: 9
-//   },
-//   data: {
-//       tags: {
-//         set: ["computing", "books"]
-//       }
-//     }
-//   })
-// }
+function createOrm<T extends AnySchema>(
+	db: OrderedTriplestore,
+	schema: RuntimeSchema<T>
+): Orm<T> {
+	const orm: any = {}
 
-// equals?: Enumerable<string> | null
-// has?: string | null
-// hasEvery?: Enumerable<string>
-// hasSome?: Enumerable<string>
-// isEmpty?: boolean
+	for (const key in schema) {
+		orm["use" + capitalize(key)] = (id: string) => useObj(db, id, schema[key])
+	}
 
-// TypeORM
-// const repository = connection.getRepository(User);
+	orm.transact = () => {
+		const ormTx: any = {}
 
-// const user = new User();
-// user.firstName = "Timber";
-// user.lastName = "Saw";
-// user.age = 25;
-// await repository.save(user);
+		const tx = db.transact()
+		for (const key in schema) {
+			ormTx[key] = (id: string) => proxyObj(tx, id, schema[key])
 
-// const allUsers = await repository.find();
-// const firstUser = await repository.findOne(1); // find by id
-// const timber = await repository.findOne({ firstName: "Timber", lastName: "Saw" });
+			ormTx["create" + capitalize(key)] = (obj: Obj) =>
+				writeObj(tx, obj, schema[key])
+		}
 
-// await repository.remove(timber);
+		ormTx.commit = () => tx.commit()
+		return ormTx
+	}
 
-function CounterApp(props: { id: string }) {
+	return orm
+}
+
+const db = new OrderedTriplestore()
+
+// Prisma, TypeORM
+const orm = createOrm(db, { counter: CounterSchema })
+
+const tx = orm.transact()
+tx.createCounter({
+	id: "counter1",
+	count: 0,
+	delta: 1,
+})
+tx.createCounter({
+	id: "counter2",
+	count: 0,
+	delta: 1,
+})
+tx.commit()
+
+export function CounterApp(props: { id: string }) {
 	const { id } = props
 
-	const counter = orm.counter(id)
-	const increment = () => (counter.count += counter.delta)
-	const decrement = () => (counter.count -= counter.delta)
+	const counter = orm.useCounter(id)
+
+	const increment = () => {
+		const tx = orm.transact()
+		const counter = tx.counter(id)
+		counter.count += counter.delta
+		tx.commit()
+	}
+
+	const decrement = () => {
+		const tx = orm.transact()
+		const counter = tx.counter(id)
+		counter.count -= counter.delta
+		tx.commit()
+	}
 
 	return (
 		<div>
@@ -96,5 +121,18 @@ function CounterApp(props: { id: string }) {
 	)
 }
 
-// const player1 = orm.player("player1")
-// orm.game("game1")
+/*
+What are the requirements?
+- read an object
+- read a list
+- set an object property as part of a transaction
+- append or remove from a list as part of a transaction
+
+- defaults and optional properties.
+
+slightly later:
+- read a nested object and subscribe to a nested object
+- map between flat and unflat schemas
+- dynamically fetch a bunch of objects in one hook (so we don't need to dance around react).
+
+*/
