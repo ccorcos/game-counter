@@ -91,7 +91,21 @@ tx.createCounter({
 	count: 0,
 	delta: 1,
 })
+tx.counter("counter2").delta += 1
 tx.commit()
+
+// Inter-dependent counters...
+// Should be able to do this with rules.
+db.index((tx, op) => {
+	const [eaov, e, a, o, v] = op.tuple
+	if (e !== "counter2") return
+	if (a !== "count") return
+	if (typeof v !== "number") return
+	if (op.type !== "set") return
+	proxyObj(tx, "counter1", CounterSchema).delta = v
+})
+
+// Should be able to efficiently query based on a single property.
 
 export function CounterApp(props: { id: string }) {
 	const { id } = props
@@ -128,7 +142,11 @@ What are the requirements?
 - set an object property as part of a transaction
 - append or remove from a list as part of a transaction
 
-- defaults and optional properties.
+- query objects
+- query lists
+- create indexes
+
+- defaults and optional properties, also union types?
 
 slightly later:
 - read a nested object and subscribe to a nested object
