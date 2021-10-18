@@ -7,7 +7,7 @@ import { gameId } from "../schema"
 
 export function App() {
 	const environment = useEnvironment()
-	const { app } = environment
+	const { dispatch } = environment.app
 	const { players } = useGame(gameId)
 	return (
 		<div
@@ -22,9 +22,7 @@ export function App() {
 				<PlayerComp playerId={playerId} key={index} index={index} />
 			))}
 			<div style={{ display: "flex", gap: 8 }}>
-				<button onClick={() => app.dispatch.addPlayer(gameId)}>
-					Add Player
-				</button>
+				<button onClick={() => dispatch.addPlayer(gameId)}>Add Player</button>
 				<button onClick={() => resetGame(environment)}>Reset Game</button>
 			</div>
 		</div>
@@ -34,7 +32,7 @@ export function App() {
 function PlayerComp(props: { playerId: string; index: number }) {
 	const { playerId, index } = props
 	const environment = useEnvironment()
-	const { app } = environment
+	const { dispatch } = environment.app
 	const player = usePlayer(playerId)
 
 	return (
@@ -58,9 +56,7 @@ function PlayerComp(props: { playerId: string; index: number }) {
 					}}
 					placeholder={`Player ${index + 1}`}
 					value={player.name}
-					onChange={(event) =>
-						app.dispatch.setName(playerId, event.target!.value)
-					}
+					onChange={(event) => dispatch.setName(playerId, event.target!.value)}
 				/>
 				<div
 					style={{
@@ -89,7 +85,7 @@ function PlayerComp(props: { playerId: string; index: number }) {
 				<div>
 					<button
 						style={{ flex: 1, padding: "6px 16px" }}
-						onClick={() => app.dispatch.incrementScore(playerId, -1)}
+						onClick={() => dispatch.incrementScore(playerId, -1)}
 					>
 						-1
 					</button>
@@ -107,7 +103,7 @@ function PlayerComp(props: { playerId: string; index: number }) {
 				<div>
 					<button
 						style={{ flex: 1, padding: "6px 16px" }}
-						onClick={() => app.dispatch.incrementScore(playerId, +1)}
+						onClick={() => dispatch.incrementScore(playerId, +1)}
 					>
 						+1
 					</button>
