@@ -2,8 +2,7 @@ import React from "react"
 import ReactDOM from "react-dom"
 import { AppState } from "./AppState"
 import { AppStorage } from "./AppStorage"
-import { CounterApp } from "./components/Counter"
-// import { App } from "./components/App"
+import { App } from "./components/App"
 import { Environment, EnvironmentProvider } from "./Environment"
 import "./index.css"
 
@@ -26,10 +25,7 @@ document.body.appendChild(root)
 
 ReactDOM.render(
 	<EnvironmentProvider value={environment}>
-		<div>
-			<CounterApp id="counter1" />
-			<CounterApp id="counter2" />
-		</div>
+		<App />
 	</EnvironmentProvider>,
 	root
 )

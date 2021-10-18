@@ -22,7 +22,12 @@ export const GameSchema = t.object({
 export type Player = typeof PlayerSchema.value
 export type Game = typeof GameSchema.value
 
-const orm: any = {}
+export type Schema = {
+	player: Player
+	game: Game
+}
 
-// const player1 = orm.player("player1")
-// orm.game("game1")
+export const schema = {
+	player: PlayerSchema,
+	game: GameSchema,
+}

@@ -22,7 +22,9 @@ export function App() {
 				<PlayerComp playerId={playerId} key={index} index={index} />
 			))}
 			<div style={{ display: "flex", gap: 8 }}>
-				<button onClick={() => app.addPlayer(gameId)}>Add Player</button>
+				<button onClick={() => app.dispatch.addPlayer(gameId)}>
+					Add Player
+				</button>
 				<button onClick={() => resetGame(environment)}>Reset Game</button>
 			</div>
 		</div>
@@ -56,7 +58,9 @@ function PlayerComp(props: { playerId: string; index: number }) {
 					}}
 					placeholder={`Player ${index + 1}`}
 					value={player.name}
-					onChange={(event) => app.setName(playerId, event.target!.value)}
+					onChange={(event) =>
+						app.dispatch.setName(playerId, event.target!.value)
+					}
 				/>
 				<div
 					style={{
@@ -85,7 +89,7 @@ function PlayerComp(props: { playerId: string; index: number }) {
 				<div>
 					<button
 						style={{ flex: 1, padding: "6px 16px" }}
-						onClick={() => app.incrementScore(playerId, -1)}
+						onClick={() => app.dispatch.incrementScore(playerId, -1)}
 					>
 						-1
 					</button>
@@ -103,7 +107,7 @@ function PlayerComp(props: { playerId: string; index: number }) {
 				<div>
 					<button
 						style={{ flex: 1, padding: "6px 16px" }}
-						onClick={() => app.incrementScore(playerId, +1)}
+						onClick={() => app.dispatch.incrementScore(playerId, +1)}
 					>
 						+1
 					</button>

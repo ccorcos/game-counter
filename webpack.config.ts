@@ -8,6 +8,10 @@ const config: Configuration = {
 	entry: "./src/index.tsx",
 	resolve: {
 		extensions: [".js", ".ts", ".tsx"],
+		alias: {
+			// https://github.com/facebook/react/issues/13991#issuecomment-435587809
+			react: path.resolve("./node_modules/react"),
+		},
 	},
 	module: {
 		rules: [
@@ -22,6 +26,7 @@ const config: Configuration = {
 			},
 		],
 	},
+
 	cache: true,
 	devtool: "source-map",
 	output: {
