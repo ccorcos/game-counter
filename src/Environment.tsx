@@ -1,14 +1,12 @@
 import React, { createContext, useContext } from "react"
-import { AppState } from "./AppState"
-
-const services = { app: AppState }
+import { TupleDb } from "./TupleDb"
 
 // ============================================================================
 // Boilerplate
 // ============================================================================
 
 export type Environment = {
-	[K in keyof typeof services]: InstanceType<typeof services[K]>
+	db: TupleDb
 }
 
 const EnvironmentContext = createContext<Environment | undefined>(undefined)
