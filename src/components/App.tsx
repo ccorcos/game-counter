@@ -1,26 +1,22 @@
-import React from "react"
-import { maybeDeletePlayer } from "../actions/deletePlayer"
-import { maybeResetGame } from "../actions/resetGame"
+import React, { useMemo } from "react"
+import { maybeDeletePlayer } from "../actions/maybeDeletePlayer"
+import { maybeResetGame } from "../actions/maybeResetGame"
 import { useEnvironment } from "../Environment"
-import { addPlayer, editName, incrementScore, Player } from "../GameState"
+import {
+	addPlayer,
+	editName,
+	getPlayer,
+	getPlayersList,
+	incrementScore,
+	Player,
+	PlayersListItem,
+} from "../GameState"
 import { useTupleDb } from "../useTupleDb"
 
 export function App() {
 	const { db } = useEnvironment()
-
-	const playerList = useTupleDb(
-		db,
-		(db) => {
-			const items = db
-				.subspace(["app"])
-				.scan({ prefix: ["playerList"] })
-				.map(({ key }) => {
-					return { order: key[1], playerId: key[2] }
-				})
-			return items
-		},
-		[]
-	)
+	const gameDb = useMemo(() => db.subspace(["app"]), [db])
+	const playerList = useTupleDb(gameDb, getPlayersList, [])
 
 	return (
 		<div
@@ -31,34 +27,22 @@ export function App() {
 			}}
 		>
 			<h2>Game Score Counter</h2>
-			{playerList.map(({ playerId, order }) => (
-				<Player playerId={playerId} order={order} key={playerId} />
+			{playerList.map((playerItem) => (
+				<Player {...playerItem} key={playerItem.playerId} />
 			))}
 			<div style={{ display: "flex", gap: 8 }}>
-				<button onClick={() => addPlayer(db.subspace(["app"]))}>
-					Add Player
-				</button>
-				<button onClick={() => maybeResetGame(db.subspace(["app"]))}>
-					Reset Game
-				</button>
+				<button onClick={() => addPlayer(gameDb)}>Add Player</button>
+				<button onClick={() => maybeResetGame(gameDb)}>Reset Game</button>
 			</div>
 		</div>
 	)
 }
 
-function Player(props: { playerId: string; order: number }) {
+function Player(props: PlayersListItem) {
 	const { playerId, order } = props
 	const { db } = useEnvironment()
-
-	const player = useTupleDb(
-		db,
-		(db) => {
-			const player = db.subspace(["app"]).get(["player", playerId])
-			if (!player) throw new Error("Missing player: " + playerId)
-			return player
-		},
-		[playerId]
-	)
+	const gameDb = useMemo(() => db.subspace(["app"]), [db])
+	const player = useTupleDb(gameDb, getPlayer, [playerId])
 
 	return (
 		<div style={{ display: "flex", paddingBottom: 8 }}>
@@ -81,9 +65,7 @@ function Player(props: { playerId: string; order: number }) {
 					}}
 					placeholder={`Player ${order + 1}`}
 					value={player.name}
-					onChange={(event) =>
-						editName(db.subspace(["app"]), playerId, event.target!.value)
-					}
+					onChange={(event) => editName(gameDb, playerId, event.target!.value)}
 				/>
 				<div
 					style={{
@@ -102,9 +84,7 @@ function Player(props: { playerId: string; order: number }) {
 							background: "transparent",
 							color: "red",
 						}}
-						onClick={() =>
-							maybeDeletePlayer(db.subspace(["app"]), playerId, order)
-						}
+						onClick={() => maybeDeletePlayer(gameDb, playerId, order)}
 					>
 						Delete
 					</button>
@@ -114,7 +94,7 @@ function Player(props: { playerId: string; order: number }) {
 				<div>
 					<button
 						style={{ flex: 1, padding: "6px 16px" }}
-						onClick={() => incrementScore(db.subspace(["app"]), playerId, -1)}
+						onClick={() => incrementScore(gameDb, playerId, -1)}
 					>
 						-1
 					</button>
@@ -132,7 +112,7 @@ function Player(props: { playerId: string; order: number }) {
 				<div>
 					<button
 						style={{ flex: 1, padding: "6px 16px" }}
-						onClick={() => incrementScore(db.subspace(["app"]), playerId, +1)}
+						onClick={() => incrementScore(gameDb, playerId, +1)}
 					>
 						+1
 					</button>

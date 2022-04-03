@@ -1,4 +1,4 @@
-import { transactionalQuery } from "tuple-database"
+import { transactionalQuery, TupleDatabaseClientApi } from "tuple-database"
 import { randomId } from "./helpers/randomId"
 
 // export type Game = { players: Player[] }
@@ -71,3 +71,23 @@ export const resetGame = transactionalQuery<GameSchema>()((tx) => {
 	tx.scan().forEach(({ key }) => tx.remove(key))
 	addPlayer(tx)
 })
+
+export type PlayersListItem = { order: number; playerId: string }
+
+export function getPlayersList(
+	db: TupleDatabaseClientApi<GameSchema>
+): PlayersListItem[] {
+	const items = db.scan({ prefix: ["playerList"] }).map(({ key }) => {
+		return { order: key[1], playerId: key[2] }
+	})
+	return items
+}
+
+export function getPlayer(
+	db: TupleDatabaseClientApi<GameSchema>,
+	playerId: string
+): Player {
+	const player = db.get(["player", playerId])
+	if (!player) throw new Error("Missing player: " + playerId)
+	return player
+}
