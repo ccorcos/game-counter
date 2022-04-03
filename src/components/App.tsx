@@ -1,13 +1,27 @@
 import React from "react"
-import { deletePlayer } from "../actions/deletePlayer"
-import { resetGame } from "../actions/resetGame"
-import { Player, useAppState } from "../AppState"
+import { maybeDeletePlayer } from "../actions/deletePlayer"
+import { maybeResetGame } from "../actions/resetGame"
 import { useEnvironment } from "../Environment"
+import { addPlayer, editName, incrementScore, Player } from "../GameState"
+import { useTupleDb } from "../useTupleDb"
 
 export function App() {
-	const environment = useEnvironment()
-	const { app } = environment
-	const players = useAppState((game) => game.players)
+	const { db } = useEnvironment()
+
+	const playerList = useTupleDb(
+		db,
+		(db) => {
+			const items = db
+				.subspace(["app"])
+				.scan({ prefix: ["playerList"] })
+				.map(({ key }) => {
+					return { order: key[1], playerId: key[2] }
+				})
+			return items
+		},
+		[]
+	)
+
 	return (
 		<div
 			style={{
@@ -17,21 +31,34 @@ export function App() {
 			}}
 		>
 			<h2>Game Score Counter</h2>
-			{players.map((player, index) => (
-				<Player player={player} index={index} key={index} />
+			{playerList.map(({ playerId, order }) => (
+				<Player playerId={playerId} order={order} key={playerId} />
 			))}
 			<div style={{ display: "flex", gap: 8 }}>
-				<button onClick={() => app.dispatch.addPlayer()}>Add Player</button>
-				<button onClick={() => resetGame(environment)}>Reset Game</button>
+				<button onClick={() => addPlayer(db.subspace(["app"]))}>
+					Add Player
+				</button>
+				<button onClick={() => maybeResetGame(db.subspace(["app"]))}>
+					Reset Game
+				</button>
 			</div>
 		</div>
 	)
 }
 
-function Player(props: { player: Player; index: number }) {
-	const { player, index } = props
-	const environment = useEnvironment()
-	const { app } = environment
+function Player(props: { playerId: string; order: number }) {
+	const { playerId, order } = props
+	const { db } = useEnvironment()
+
+	const player = useTupleDb(
+		db,
+		(db) => {
+			const player = db.subspace(["app"]).get(["player", playerId])
+			if (!player) throw new Error("Missing player: " + playerId)
+			return player
+		},
+		[playerId]
+	)
 
 	return (
 		<div style={{ display: "flex", paddingBottom: 8 }}>
@@ -52,10 +79,10 @@ function Player(props: { player: Player; index: number }) {
 						paddingRight: "3em",
 						width: "1em",
 					}}
-					placeholder={`Player ${index + 1}`}
+					placeholder={`Player ${order + 1}`}
 					value={player.name}
 					onChange={(event) =>
-						app.dispatch.editName(index, event.target!.value)
+						editName(db.subspace(["app"]), playerId, event.target!.value)
 					}
 				/>
 				<div
@@ -75,7 +102,9 @@ function Player(props: { player: Player; index: number }) {
 							background: "transparent",
 							color: "red",
 						}}
-						onClick={() => deletePlayer(environment, index)}
+						onClick={() =>
+							maybeDeletePlayer(db.subspace(["app"]), playerId, order)
+						}
 					>
 						Delete
 					</button>
@@ -85,7 +114,7 @@ function Player(props: { player: Player; index: number }) {
 				<div>
 					<button
 						style={{ flex: 1, padding: "6px 16px" }}
-						onClick={() => app.dispatch.incrementScore(index, -1)}
+						onClick={() => incrementScore(db.subspace(["app"]), playerId, -1)}
 					>
 						-1
 					</button>
@@ -103,7 +132,7 @@ function Player(props: { player: Player; index: number }) {
 				<div>
 					<button
 						style={{ flex: 1, padding: "6px 16px" }}
-						onClick={() => app.dispatch.incrementScore(index, +1)}
+						onClick={() => incrementScore(db.subspace(["app"]), playerId, +1)}
 					>
 						+1
 					</button>

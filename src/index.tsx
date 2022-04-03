@@ -2,13 +2,13 @@ import React from "react"
 import ReactDOM from "react-dom"
 import { App } from "./components/App"
 import { Environment, EnvironmentProvider } from "./Environment"
+import { initGame } from "./GameState"
 import "./index.css"
 import { createTupleDb } from "./TupleDb"
 
 // Build the environment.
 const db = createTupleDb()
-// TODO: if no game, create a new game.
-newGame()
+initGame(db.subspace(["app"]))
 
 const environment: Environment = { db }
 

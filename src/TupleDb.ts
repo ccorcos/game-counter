@@ -1,11 +1,14 @@
 import {
+	SchemaSubspace,
 	TupleDatabase,
 	TupleDatabaseClient,
 	TupleDatabaseClientApi,
 } from "tuple-database"
 import { BrowserStorage } from "./BrowserStorage"
+import { GameSchema } from "./GameState"
 
-export type Schema = { key: ["version"]; value: number }
+type AppSchema = SchemaSubspace<["app"], GameSchema>
+export type Schema = { key: ["version"]; value: number } | AppSchema
 
 export type TupleDb = TupleDatabaseClientApi<Schema>
 

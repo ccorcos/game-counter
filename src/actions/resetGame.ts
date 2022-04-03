@@ -1,7 +1,8 @@
-import { Environment } from "../Environment"
+import { TupleDatabaseClientApi } from "tuple-database"
+import { GameSchema, resetGame } from "../GameState"
 
-export function resetGame(environment: Environment) {
+export function maybeResetGame(db: TupleDatabaseClientApi<GameSchema>) {
 	const response = window.confirm(`Are you want to reset the game?`)
 	if (!response) return
-	environment.app.dispatch.resetGame()
+	resetGame(db)
 }
