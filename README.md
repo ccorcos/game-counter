@@ -9,7 +9,7 @@ A simple application for keeping score in games. For example, golf or Settlers o
 - No side-effects at the top level except for index.tsx.
 - External effects interface through services defined on the Environment.
 - The Environment is plumbed around everywhere.
-- StateMachine is a Redux-style state management abstraction with less boilerplate.
+- TupleDatabase as a UI state management system.
 
 ## Development
 
