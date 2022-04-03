@@ -1,4 +1,9 @@
-import { transactionalQuery, TupleDatabaseClientApi } from "tuple-database"
+import {
+	ReadOnlyTupleDatabaseClientApi,
+	transactionalQuery,
+} from "tuple-database"
+import { nowDateTime } from "./helpers/dateHelpers"
+import { mergeKey } from "./helpers/mergeKeys"
 import { randomId } from "./helpers/randomId"
 
 // export type Game = { players: Player[] }
@@ -7,6 +12,15 @@ export type Player = { id: string; name: string; score: number }
 export type GameSchema =
 	| { key: ["playerList", number, string]; value: null }
 	| { key: ["player", string]; value: Player }
+	| {
+			key: [
+				"history",
+				{ datetime: string },
+				{ playerId: string },
+				{ delta: number }
+			]
+			value: null
+	  }
 // More verbose approach:
 // | { key: ["playerList", {index: number}, {id: string}]; value: null }
 // | { key: ["player", {id: string}]; value: Player }
@@ -59,11 +73,52 @@ export const editName = transactionalQuery<GameSchema>()(
 	}
 )
 
+function getLastHistoryItem(db: ReadOnlyTupleDatabaseClientApi<GameSchema>) {
+	const result = db.scan({ prefix: ["history"], limit: 1, reverse: true })
+	// TODO: mergeKey
+	if (result.length === 1) return result[0].key
+}
+
+const trackHistory = transactionalQuery<GameSchema>()(
+	(tx, playerId: string, delta: number) => {
+		const lastItem = getLastHistoryItem(tx)
+
+		// Squash last item.
+		if (lastItem && lastItem[2].playerId === playerId) {
+			tx.remove(lastItem)
+			const newDelta = lastItem[3].delta + delta
+			if (newDelta === 0) return
+
+			// TODO: dont merge if you've waited more than 10 seconds
+			tx.set(
+				[
+					"history",
+					{ datetime: nowDateTime() },
+					{ playerId: playerId },
+					{ delta: newDelta },
+				],
+				null
+			)
+		} else {
+			tx.set(
+				[
+					"history",
+					{ datetime: nowDateTime() },
+					{ playerId: playerId },
+					{ delta },
+				],
+				null
+			)
+		}
+	}
+)
+
 export const incrementScore = transactionalQuery<GameSchema>()(
-	(tx, id: string, delta: number) => {
-		const player = tx.get(["player", id])
+	(tx, playerId: string, delta: number) => {
+		const player = tx.get(["player", playerId])
 		if (!player) throw new Error()
-		tx.set(["player", id], { ...player, score: player.score + delta })
+		tx.set(["player", playerId], { ...player, score: player.score + delta })
+		trackHistory(tx, playerId, delta)
 	}
 )
 
@@ -75,7 +130,7 @@ export const resetGame = transactionalQuery<GameSchema>()((tx) => {
 export type PlayersListItem = { order: number; playerId: string }
 
 export function getPlayersList(
-	db: TupleDatabaseClientApi<GameSchema>
+	db: ReadOnlyTupleDatabaseClientApi<GameSchema>
 ): PlayersListItem[] {
 	const items = db.scan({ prefix: ["playerList"] }).map(({ key }) => {
 		return { order: key[1], playerId: key[2] }
@@ -84,10 +139,19 @@ export function getPlayersList(
 }
 
 export function getPlayer(
-	db: TupleDatabaseClientApi<GameSchema>,
+	db: ReadOnlyTupleDatabaseClientApi<GameSchema>,
 	playerId: string
 ): Player {
 	const player = db.get(["player", playerId])
 	if (!player) throw new Error("Missing player: " + playerId)
 	return player
+}
+
+export function getHistory(db: ReadOnlyTupleDatabaseClientApi<GameSchema>) {
+	const history = db
+		.subspace(["history"])
+		.scan()
+		.map(({ key }) => key)
+		.map(mergeKey)
+	return history
 }

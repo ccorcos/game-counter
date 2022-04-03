@@ -5,6 +5,7 @@ import { useEnvironment } from "../Environment"
 import {
 	addPlayer,
 	editName,
+	getHistory,
 	getPlayer,
 	getPlayersList,
 	incrementScore,
@@ -34,6 +35,7 @@ export function App() {
 				<button onClick={() => addPlayer(gameDb)}>Add Player</button>
 				<button onClick={() => maybeResetGame(gameDb)}>Reset Game</button>
 			</div>
+			<History />
 		</div>
 	)
 }
@@ -118,6 +120,24 @@ function Player(props: PlayersListItem) {
 					</button>
 				</div>
 			</div>
+		</div>
+	)
+}
+
+function History() {
+	const { db } = useEnvironment()
+	const gameDb = useMemo(() => db.subspace(["app"]), [db])
+	const history = useTupleDb(gameDb, getHistory, [])
+
+	return (
+		<div>
+			{history.map((historyItem) => {
+				return (
+					<div>
+						{historyItem.datetime} :{historyItem.playerId} :{historyItem.delta}
+					</div>
+				)
+			})}
 		</div>
 	)
 }
