@@ -8,10 +8,12 @@ import {
 	getHistory,
 	getPlayer,
 	getPlayersList,
+	HistoryObj,
 	incrementScore,
 	Player,
 	PlayersListItem,
 } from "../GameState"
+import { formatDatetime } from "../helpers/dateHelpers"
 import { useTupleDb } from "../useTupleDb"
 
 export function App() {
@@ -130,14 +132,45 @@ function History() {
 	const history = useTupleDb(gameDb, getHistory, [])
 
 	return (
-		<div>
-			{history.map((historyItem) => {
-				return (
-					<div>
-						{historyItem.datetime} :{historyItem.playerId} :{historyItem.delta}
-					</div>
-				)
+		<div
+			style={{
+				display: "flex",
+				flexDirection: "column-reverse",
+				marginTop: "2em",
+			}}
+		>
+			{history.map((historyItem, i) => {
+				return <HistoryItem {...historyItem} key={i} />
 			})}
+		</div>
+	)
+}
+
+function HistoryItem(props: HistoryObj) {
+	const { db } = useEnvironment()
+	const gameDb = useMemo(() => db.subspace(["app"]), [db])
+	const player = useTupleDb(gameDb, getPlayer, [props.playerId])
+
+	return (
+		<div
+			style={{
+				display: "flex",
+				flexDirection: "column",
+				marginBottom: "0.4em",
+			}}
+		>
+			<span style={{ fontSize: "0.7em" }}>
+				{formatDatetime(props.datetime)}
+			</span>
+			<div style={{ display: "flex" }}>
+				<div style={{ flex: 1 }}>
+					<span>{player.name}</span>
+				</div>
+				<div style={{ textAlign: "right" }}>
+					{props.delta > 0 && "+"}
+					{props.delta}
+				</div>
+			</div>
 		</div>
 	)
 }

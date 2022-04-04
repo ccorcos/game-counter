@@ -1,4 +1,2 @@
 
-
-- mergeKeys and names tuples. Define those types.
-- render history item
+- move some of these helpers back into tuple-database

@@ -2,25 +2,30 @@ import {
 	ReadOnlyTupleDatabaseClientApi,
 	transactionalQuery,
 } from "tuple-database"
-import { nowDateTime } from "./helpers/dateHelpers"
-import { mergeKey } from "./helpers/mergeKeys"
+import { getTimeMs, nowDateTime } from "./helpers/dateHelpers"
+import {
+	NamedTupleToObject,
+	namedTupleToObject,
+} from "./helpers/namedTupleHelpers"
 import { randomId } from "./helpers/randomId"
 
 // export type Game = { players: Player[] }
 export type Player = { id: string; name: string; score: number }
 
+type HistoryTuple = [
+	"history",
+	{ datetime: string },
+	{ playerId: string },
+	{ delta: number }
+]
+
+export type HistoryObj = NamedTupleToObject<HistoryTuple>
+
 export type GameSchema =
 	| { key: ["playerList", number, string]; value: null }
 	| { key: ["player", string]; value: Player }
-	| {
-			key: [
-				"history",
-				{ datetime: string },
-				{ playerId: string },
-				{ delta: number }
-			]
-			value: null
-	  }
+	| { key: HistoryTuple; value: null }
+
 // More verbose approach:
 // | { key: ["playerList", {index: number}, {id: string}]; value: null }
 // | { key: ["player", {id: string}]; value: Player }
@@ -73,23 +78,30 @@ export const editName = transactionalQuery<GameSchema>()(
 	}
 )
 
-function getLastHistoryItem(db: ReadOnlyTupleDatabaseClientApi<GameSchema>) {
-	const result = db.scan({ prefix: ["history"], limit: 1, reverse: true })
-	// TODO: mergeKey
-	if (result.length === 1) return result[0].key
+function getLastHistoryTuple(db: ReadOnlyTupleDatabaseClientApi<GameSchema>) {
+	const result = db
+		.scan({ prefix: ["history"], limit: 1, reverse: true })
+		.map(({ key }) => key)
+
+	if (result.length === 1) return result[0]
 }
 
 const trackHistory = transactionalQuery<GameSchema>()(
 	(tx, playerId: string, delta: number) => {
-		const lastItem = getLastHistoryItem(tx)
+		const lastTuple = getLastHistoryTuple(tx)
 
 		// Squash last item.
-		if (lastItem && lastItem[2].playerId === playerId) {
-			tx.remove(lastItem)
-			const newDelta = lastItem[3].delta + delta
+		squash: if (lastTuple) {
+			const historyObj = namedTupleToObject(lastTuple)
+			if (historyObj.playerId !== playerId) break squash
+
+			const deltaMs = getTimeMs(nowDateTime()) - getTimeMs(historyObj.datetime)
+			if (deltaMs > 5_000) break squash
+
+			tx.remove(lastTuple)
+			const newDelta = historyObj.delta + delta
 			if (newDelta === 0) return
 
-			// TODO: dont merge if you've waited more than 10 seconds
 			tx.set(
 				[
 					"history",
@@ -99,17 +111,18 @@ const trackHistory = transactionalQuery<GameSchema>()(
 				],
 				null
 			)
-		} else {
-			tx.set(
-				[
-					"history",
-					{ datetime: nowDateTime() },
-					{ playerId: playerId },
-					{ delta },
-				],
-				null
-			)
+			return
 		}
+
+		tx.set(
+			[
+				"history",
+				{ datetime: nowDateTime() },
+				{ playerId: playerId },
+				{ delta },
+			],
+			null
+		)
 	}
 )
 
@@ -147,11 +160,13 @@ export function getPlayer(
 	return player
 }
 
-export function getHistory(db: ReadOnlyTupleDatabaseClientApi<GameSchema>) {
+export function getHistory(
+	db: ReadOnlyTupleDatabaseClientApi<GameSchema>
+): HistoryObj[] {
 	const history = db
 		.subspace(["history"])
 		.scan()
 		.map(({ key }) => key)
-		.map(mergeKey)
+		.map(namedTupleToObject)
 	return history
 }
