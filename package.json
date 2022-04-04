@@ -20,7 +20,7 @@
 		"mini-css-extract-plugin": "^2.2.0",
 		"react": "^17.0.1",
 		"react-dom": "^17.0.1",
-		"tuple-database": "^2.0.5"
+		"tuple-database": "^2.0.6"
 	},
 	"devDependencies": {
 		"@types/date-fns": "^2.6.0",
