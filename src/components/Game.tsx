@@ -1,11 +1,11 @@
-import React, { useMemo } from "react"
+import React from "react"
 import { useTupleDatabase } from "tuple-database/useTupleDatabase"
 import { maybeDeletePlayer } from "../actions/maybeDeletePlayer"
 import { maybeResetGame } from "../actions/maybeResetGame"
-import { useEnvironment } from "../Environment"
 import {
 	addPlayer,
 	editName,
+	GameDb,
 	getHistory,
 	getPlayer,
 	getPlayersList,
@@ -13,12 +13,11 @@ import {
 	incrementScore,
 	Player,
 	PlayersListItem,
-} from "../GameState"
+} from "../GameDb"
 import { formatDatetime } from "../helpers/dateHelpers"
 
-export function App() {
-	const { db } = useEnvironment()
-	const gameDb = useMemo(() => db.subspace(["app"]), [db])
+export function Game(props: { gameDb: GameDb }) {
+	const { gameDb } = props
 	const playerList = useTupleDatabase(gameDb, getPlayersList, [])
 
 	return (
@@ -31,21 +30,19 @@ export function App() {
 		>
 			<h2>Game Score Counter</h2>
 			{playerList.map((playerItem) => (
-				<Player {...playerItem} key={playerItem.playerId} />
+				<Player {...playerItem} key={playerItem.playerId} gameDb={gameDb} />
 			))}
 			<div style={{ display: "flex", gap: 8 }}>
 				<button onClick={() => addPlayer(gameDb)}>Add Player</button>
 				<button onClick={() => maybeResetGame(gameDb)}>Reset Game</button>
 			</div>
-			<History />
+			<History gameDb={gameDb} />
 		</div>
 	)
 }
 
-function Player(props: PlayersListItem) {
-	const { playerId, order } = props
-	const { db } = useEnvironment()
-	const gameDb = useMemo(() => db.subspace(["app"]), [db])
+function Player(props: PlayersListItem & { gameDb: GameDb }) {
+	const { playerId, order, gameDb } = props
 	const player = useTupleDatabase(gameDb, getPlayer, [playerId])
 
 	return (
@@ -126,9 +123,8 @@ function Player(props: PlayersListItem) {
 	)
 }
 
-function History() {
-	const { db } = useEnvironment()
-	const gameDb = useMemo(() => db.subspace(["app"]), [db])
+function History(props: { gameDb: GameDb }) {
+	const { gameDb } = props
 	const history = useTupleDatabase(gameDb, getHistory, [])
 
 	return (
@@ -140,15 +136,14 @@ function History() {
 			}}
 		>
 			{history.map((historyItem, i) => {
-				return <HistoryItem {...historyItem} key={i} />
+				return <HistoryItem {...historyItem} key={i} gameDb={gameDb} />
 			})}
 		</div>
 	)
 }
 
-function HistoryItem(props: HistoryObj) {
-	const { db } = useEnvironment()
-	const gameDb = useMemo(() => db.subspace(["app"]), [db])
+function HistoryItem(props: HistoryObj & { gameDb: GameDb }) {
+	const { gameDb } = props
 	const player = useTupleDatabase(gameDb, getPlayer, [props.playerId])
 
 	return (

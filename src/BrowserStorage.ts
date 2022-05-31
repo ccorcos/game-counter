@@ -1,7 +1,6 @@
 import { InMemoryTupleStorage, TupleStorageApi, Writes } from "tuple-database"
 
-const key = "tupleStorage"
-function load() {
+function load(key: string) {
 	const result = localStorage.getItem(key)
 	if (!result) return
 	try {
@@ -9,7 +8,7 @@ function load() {
 	} catch (error) {}
 }
 
-function save(value: any) {
+function save(key: string, value: any) {
 	localStorage.setItem(key, JSON.stringify(value))
 }
 
@@ -17,12 +16,12 @@ export class BrowserStorage
 	extends InMemoryTupleStorage
 	implements TupleStorageApi
 {
-	constructor() {
-		super(load())
+	constructor(public localStorageKey: string) {
+		super(load(localStorageKey))
 	}
 
 	commit(writes: Writes): void {
 		super.commit(writes)
-		save(this.data)
+		save(this.localStorageKey, this.data)
 	}
 }

@@ -3,11 +3,18 @@ import {
 	namedTupleToObject,
 	ReadOnlyTupleDatabaseClientApi,
 	transactionalQuery,
+	TupleDatabase,
+	TupleDatabaseClient,
+	TupleDatabaseClientApi,
 } from "tuple-database"
+import { BrowserStorage } from "./BrowserStorage"
 import { getTimeMs, nowDateTime } from "./helpers/dateHelpers"
 import { randomId } from "./helpers/randomId"
 
-// export type Game = { players: Player[] }
+// ==========================================================================
+// Types / Schema
+// ==========================================================================
+
 export type Player = { id: string; name: string; score: number }
 
 type HistoryTuple = [
@@ -28,8 +35,60 @@ export type GameSchema =
 // | { key: ["playerList", {index: number}, {id: string}]; value: null }
 // | { key: ["player", {id: string}]; value: Player }
 
-const getNextPlayerIndex = transactionalQuery<GameSchema>()((tx) => {
-	const pairs = tx.scan({
+// ==========================================================================
+// Database.
+// ==========================================================================
+
+export type GameDb = TupleDatabaseClientApi<GameSchema>
+
+export function createGameDb(): GameDb {
+	return new TupleDatabaseClient(
+		new TupleDatabase(new BrowserStorage("gamedb"))
+	)
+}
+
+// ==========================================================================
+// Reads.
+// ==========================================================================
+
+export type ReadOnlyGameDb = ReadOnlyTupleDatabaseClientApi<GameSchema>
+
+export type PlayersListItem = { order: number; playerId: string }
+
+export function getPlayersList(db: ReadOnlyGameDb): PlayersListItem[] {
+	const items = db.scan({ prefix: ["playerList"] }).map(({ key }) => {
+		return { order: key[1], playerId: key[2] }
+	})
+	return items
+}
+
+export function getPlayer(db: ReadOnlyGameDb, playerId: string): Player {
+	const player = db.get(["player", playerId])
+	if (!player) throw new Error("Missing player: " + playerId)
+	return player
+}
+
+export function getHistory(db: ReadOnlyGameDb): HistoryObj[] {
+	const history = db
+		.subspace(["history"])
+		.scan()
+		.map(({ key }) => key)
+		.map(namedTupleToObject)
+	return history
+}
+
+// ==========================================================================
+// Writes.
+// ==========================================================================
+
+export const initGameDb = transactionalQuery<GameSchema>()((tx) => {
+	if (tx.scan({ limit: 1 }).length === 0) {
+		addPlayer(tx)
+	}
+})
+
+function getNextPlayerIndex(db: ReadOnlyGameDb) {
+	const pairs = db.scan({
 		prefix: ["playerList"],
 		reverse: true,
 		limit: 1,
@@ -39,13 +98,7 @@ const getNextPlayerIndex = transactionalQuery<GameSchema>()((tx) => {
 	const { key } = pairs[0]
 	const lastIndex = key[1]
 	return lastIndex + 1
-})
-
-export const initGame = transactionalQuery<GameSchema>()((tx) => {
-	if (tx.scan({ limit: 1 }).length === 0) {
-		addPlayer(tx)
-	}
-})
+}
 
 export const addPlayer = transactionalQuery<GameSchema>()((tx) => {
 	const player = { id: randomId(), name: "", score: 0 }
@@ -76,7 +129,7 @@ export const editName = transactionalQuery<GameSchema>()(
 	}
 )
 
-function getLastHistoryTuple(db: ReadOnlyTupleDatabaseClientApi<GameSchema>) {
+function getLastHistoryTuple(db: ReadOnlyGameDb) {
 	const result = db
 		.scan({ prefix: ["history"], limit: 1, reverse: true })
 		.map(({ key }) => key)
@@ -137,34 +190,3 @@ export const resetGame = transactionalQuery<GameSchema>()((tx) => {
 	tx.scan().forEach(({ key }) => tx.remove(key))
 	addPlayer(tx)
 })
-
-export type PlayersListItem = { order: number; playerId: string }
-
-export function getPlayersList(
-	db: ReadOnlyTupleDatabaseClientApi<GameSchema>
-): PlayersListItem[] {
-	const items = db.scan({ prefix: ["playerList"] }).map(({ key }) => {
-		return { order: key[1], playerId: key[2] }
-	})
-	return items
-}
-
-export function getPlayer(
-	db: ReadOnlyTupleDatabaseClientApi<GameSchema>,
-	playerId: string
-): Player {
-	const player = db.get(["player", playerId])
-	if (!player) throw new Error("Missing player: " + playerId)
-	return player
-}
-
-export function getHistory(
-	db: ReadOnlyTupleDatabaseClientApi<GameSchema>
-): HistoryObj[] {
-	const history = db
-		.subspace(["history"])
-		.scan()
-		.map(({ key }) => key)
-		.map(namedTupleToObject)
-	return history
-}

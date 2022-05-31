@@ -1,28 +1,39 @@
 import React from "react"
 import ReactDOM from "react-dom"
-import { App } from "./components/App"
-import { Environment, EnvironmentProvider } from "./Environment"
-import { initGame } from "./GameState"
+import { Game } from "./components/Game"
+import { createGameDb, initGameDb } from "./GameDb"
 import "./index.css"
-import { createTupleDb } from "./TupleDb"
 
 // Build the environment.
-const db = createTupleDb()
-initGame(db.subspace(["app"]))
-
-const environment: Environment = { db }
+const gameDb = createGameDb()
+initGameDb(gameDb)
 
 // For debugging from the Console.
-;(window as any)["environment"] = environment
-Object.assign(window as any, environment)
+;(window as any)["gameDb"] = gameDb
 
 // Render the app.
 const root = document.createElement("div")
 document.body.appendChild(root)
 
-ReactDOM.render(
-	<EnvironmentProvider value={environment}>
-		<App />
-	</EnvironmentProvider>,
-	root
-)
+ReactDOM.render(<Game gameDb={gameDb} />, root)
+
+// What is a module?
+// Lets introduce concepts one at a time...
+//
+
+/*
+
+- "smart" vs "dumb" components?
+	- a View vs a Component.
+
+
+- keyboard
+- commands
+- focus
+
+- command prompt
+- modules, initialization.
+- some other modoule that lets you list out different games
+- fresh module with something else entirely.
+
+*/

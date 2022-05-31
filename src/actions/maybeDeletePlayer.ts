@@ -1,5 +1,5 @@
 import { TupleDatabaseClientApi } from "tuple-database"
-import { deletePlayer, GameSchema } from "../GameState"
+import { deletePlayer, GameSchema } from "../GameDb"
 
 export function maybeDeletePlayer(
 	db: TupleDatabaseClientApi<GameSchema>,
