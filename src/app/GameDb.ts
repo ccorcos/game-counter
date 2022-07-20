@@ -7,7 +7,7 @@ import {
 	TupleDatabaseClient,
 	TupleDatabaseClientApi,
 } from "tuple-database"
-import { BrowserStorage } from "./BrowserStorage"
+import { BrowserTupleStorage } from "tuple-database/storage/BrowserTupleStorage"
 import { getTimeMs, nowDateTime } from "./helpers/dateHelpers"
 import { randomId } from "./helpers/randomId"
 
@@ -43,7 +43,7 @@ export type GameDb = TupleDatabaseClientApi<GameSchema>
 
 export function createGameDb(): GameDb {
 	return new TupleDatabaseClient(
-		new TupleDatabase(new BrowserStorage("gamedb"))
+		new TupleDatabase(new BrowserTupleStorage("gamedb"))
 	)
 }
 

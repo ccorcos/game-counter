@@ -2,7 +2,6 @@ import React from "react"
 import ReactDOM from "react-dom"
 import { Game } from "./components/Game"
 import { createGameDb, initGameDb } from "./GameDb"
-import "./index.css"
 
 // Build the environment.
 const gameDb = createGameDb()
