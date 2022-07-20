@@ -16,15 +16,7 @@ document.body.appendChild(root)
 
 ReactDOM.render(<Game gameDb={gameDb} />, root)
 
-// What is a module?
-// Lets introduce concepts one at a time...
-//
-
 /*
-
-- "smart" vs "dumb" components?
-	- a View vs a Component.
-
 
 - keyboard
 - commands
